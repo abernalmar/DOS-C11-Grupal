@@ -1,0 +1,80 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Overwrite .env
+      run: cp .env.docker .env
+    - name: Remove previous tests results
+      run: rm -rf ./tests/e2e/results
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    - name: Install node dependencies
+      run: npm ci
+    - name: Start Docker Compose
+      run: docker compose up -d
+    - name: Wait for MongoDB and MariaDB to be Ready
+      run: |
+        mongo_ready=false
+        maria_ready=false
+
+        for i in {1..6}; do  # Espera hasta 3 minutos (6 intentos * 30 segundos)
+          if ! $mongo_ready; then
+            if docker-compose logs mongodb | grep -q "Waiting for connections"; then
+              echo "MongoDB is ready."
+              mongo_ready=true
+            else
+              echo "Waiting for MongoDB to be ready..."
+            fi
+          fi
+
+          if ! $maria_ready; then
+            if docker-compose logs mariadb | grep -q "ready for connections"; then
+              echo "MariaDB is ready."
+              maria_ready=true
+            else
+              echo "Waiting for MariaDB to be ready..."
+            fi
+          fi
+
+          if $mongo_ready && $maria_ready; then
+            break
+          fi
+
+          sleep 30
+        done
+
+        if ! $mongo_ready || ! $maria_ready; then
+          echo "Timeout waiting for services to be ready"
+          exit 1
+        fi
+    - name: Show Docker Compose Logs
+      run: docker-compose logs
+    - name: Run tests
+      run: npm run test:small
+    - name: Generate artifact name
+      id: generate-artifact-name
+      run: |
+        ARTIFACT_NAME=$(echo "${{ github.repository }}" | sed 's/[\/:"<>|*?\\]/-/g')
+        echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+    - name: Upload tests results as artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ env.ARTIFACT_NAME }}
+        path: tests/e2e/results
