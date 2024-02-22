@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: api
+  name: api-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-pod
+  template:
+    metadata:
+      labels:
+        app: api-pod
+    spec:
+      containers:
+      - name: api-container
+        env:
+        - name: DBHOST
+          value: mongodb-service
+        resources: {}
+        image: abernalmar/nivelc:c11
+        ports:
+        - containerPort: 8080
+      restartPolicy: Always

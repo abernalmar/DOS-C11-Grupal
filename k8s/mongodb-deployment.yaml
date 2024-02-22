@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mongodb
+  name: mongodb-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb-pod
+  template:
+    metadata:
+      labels:
+        app: mongodb-pod
+    spec:
+      containers:
+      - name: mongodb-container
+        volumeMounts:
+          - mountPath: /var/lib/mongo
+            name: mongodb
+        image: mongo:4.2
+        ports:
+        - containerPort: 27017
+      volumes:
+      - name: mongodb
+        persistentVolumeClaim:
+          claimName: mongodb-pvc
+      restartPolicy: Always
